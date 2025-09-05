@@ -33,7 +33,4 @@
 
 ---
 
-## Project Structure
-seamless-dj-project/
-├── frontend/        # React frontend app
-├── backend/         # Node.js backend (API / server logic)
+
