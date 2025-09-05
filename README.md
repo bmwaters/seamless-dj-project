@@ -6,9 +6,7 @@
 
 ## What is the purpose?
 
-- This app is for an all day event that will have different vibes and different sized playlists, from one song to thirty songs, that need to be played throughout the day. Think of it as your own personal dj all in one mobile device with your very own playlists from Spotify in exactly the order you want them to be played. 
-
----
+This app is for an all day event that will have different vibes and different sized playlists, from one song to thirty songs, that need to be played throughout the day. Think of it as your own personal dj all in one mobile device with your very own playlists from Spotify in exactly the order you want them to be played. 
 
 ---
 
