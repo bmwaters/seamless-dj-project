@@ -1,8 +1,18 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+beforeEach(() => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      status: 401,
+      ok: false,
+      json: async () => ({ error: 'Not logged in' }),
+    })
+  );
+});
+
+test('renders login prompt', () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  expect(screen.getByText(/Seamless DJ/i)).toBeInTheDocument();
+  expect(screen.getByText(/Log in with Spotify/i)).toBeInTheDocument();
 });

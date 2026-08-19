@@ -1,38 +1,150 @@
-.App {
-  text-align: center;
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+  font-family: sans-serif;
+  color: #111;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
+.header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.user,
+.login {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.login,
+.user a {
+  color: #fff;
+  background: #1db954;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.user a {
+  background: #333;
+}
+
+.error {
+  color: #b00020;
+}
+
+.hint {
+  color: #666;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+
+@media (min-width: 800px) {
+  .layout {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
   }
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.playlists,
+.sets,
+.tracks {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.playlists li,
+.set-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.playlists img,
+.set-row img {
+  border-radius: 4px;
+  object-fit: cover;
+  background: #eee;
+  flex-shrink: 0;
+}
+
+.playlists div {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  gap: 2px;
+  flex: 1;
 }
 
-.App-link {
-  color: #61dafb;
+.playlists span,
+.meta {
+  color: #666;
+  font-size: 0.9rem;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.playlists button,
+.set-actions button {
+  border: 1px solid #ccc;
+  background: #f4f4f4;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.playlists button {
+  background: #1db954;
+  border-color: #1db954;
+  color: #fff;
+  font-weight: 600;
+}
+
+.playlists button:disabled,
+.set-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.set {
+  margin-bottom: 8px;
+}
+
+.set-row input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-weight: 600;
+  padding: 6px 8px;
+}
+
+.set-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tracks {
+  padding: 8px 0 16px 60px;
+  color: #444;
+  font-size: 0.95rem;
+}
+
+.tracks li {
+  padding: 3px 0;
 }

@@ -1,9 +1,320 @@
+require('dotenv').config();
+
 const express = require('express');
+const cors = require('cors');
+const session = require('express-session');
+const crypto = require('crypto');
+
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5050;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://127.0.0.1:3000';
+const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
+const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
+const SPOTIFY_REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI;
+const SPOTIFY_SCOPES = [
+  'user-read-email',
+  'playlist-read-private',
+  'playlist-read-collaborative',
+].join(' ');
+
+const allowedOrigins = [
+  FRONTEND_URL,
+  'http://127.0.0.1:3000',
+  'http://localhost:3000',
+];
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`Origin ${origin} is not allowed by CORS`));
+    },
+    credentials: true,
+  })
+);
+app.use(express.json());
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || 'dev-session-secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: false,
+      maxAge: 24 * 60 * 60 * 1000,
+    },
+  })
+);
+
+function requireSpotifyConfig(res) {
+  if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET || !SPOTIFY_REDIRECT_URI) {
+    res.status(500).json({
+      error:
+        'Spotify is not configured. Add SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and SPOTIFY_REDIRECT_URI to backend/.env',
+    });
+    return false;
+  }
+  return true;
+}
+
+function basicAuthHeader() {
+  return (
+    'Basic ' +
+    Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64')
+  );
+}
+
+async function exchangeSpotifyToken(body) {
+  const response = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: basicAuthHeader(),
+    },
+    body,
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    const message = data.error_description || data.error || 'Spotify token request failed';
+    throw new Error(message);
+  }
+  return data;
+}
+
+function storeTokens(req, tokenResponse) {
+  req.session.tokens = {
+    access_token: tokenResponse.access_token,
+    refresh_token: tokenResponse.refresh_token || req.session.tokens?.refresh_token,
+    expiresAt: Date.now() + tokenResponse.expires_in * 1000,
+  };
+}
+
+async function getAccessToken(req) {
+  const tokens = req.session.tokens;
+  if (!tokens?.access_token) {
+    return null;
+  }
+
+  if (Date.now() < tokens.expiresAt - 60 * 1000) {
+    return tokens.access_token;
+  }
+
+  if (!tokens.refresh_token) {
+    return null;
+  }
+
+  const refreshed = await exchangeSpotifyToken(
+    new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: tokens.refresh_token,
+    })
+  );
+  storeTokens(req, refreshed);
+  return req.session.tokens.access_token;
+}
+
+async function requireAuth(req, res, next) {
+  try {
+    const accessToken = await getAccessToken(req);
+    if (!accessToken) {
+      res.status(401).json({ error: 'Not logged in' });
+      return;
+    }
+    req.accessToken = accessToken;
+    next();
+  } catch (error) {
+    res.status(401).json({ error: error.message });
+  }
+}
 
 app.get('/', (req, res) => {
-    res.send('Seamless DJ Project Backend Running');
+  res.send('Seamless DJ Project Backend Running');
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.get('/login', (req, res) => {
+  if (!requireSpotifyConfig(res)) {
+    return;
+  }
+
+  const state = crypto.randomBytes(16).toString('hex');
+  req.session.oauthState = state;
+
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: SPOTIFY_CLIENT_ID,
+    scope: SPOTIFY_SCOPES,
+    redirect_uri: SPOTIFY_REDIRECT_URI,
+    state,
+    show_dialog: 'false',
+  });
+
+  req.session.save((err) => {
+    if (err) {
+      res.status(500).send('Could not start Spotify login');
+      return;
+    }
+    res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`);
+  });
+});
+
+app.get('/callback', async (req, res) => {
+  try {
+    if (!requireSpotifyConfig(res)) {
+      return;
+    }
+
+    const { code, state, error } = req.query;
+    if (error) {
+      res.redirect(`${FRONTEND_URL}?error=${encodeURIComponent(String(error))}`);
+      return;
+    }
+
+    if (!code || !state || state !== req.session.oauthState) {
+      res.redirect(`${FRONTEND_URL}?error=invalid_state`);
+      return;
+    }
+
+    req.session.oauthState = undefined;
+
+    const tokenResponse = await exchangeSpotifyToken(
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: String(code),
+        redirect_uri: SPOTIFY_REDIRECT_URI,
+      })
+    );
+
+    storeTokens(req, tokenResponse);
+    req.session.save((err) => {
+      if (err) {
+        res.redirect(`${FRONTEND_URL}?error=session`);
+        return;
+      }
+      res.redirect(FRONTEND_URL);
+    });
+  } catch (error) {
+    res.redirect(`${FRONTEND_URL}?error=${encodeURIComponent(error.message)}`);
+  }
+});
+
+app.get('/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.redirect(FRONTEND_URL);
+  });
+});
+
+app.get('/api/me', requireAuth, async (req, res) => {
+  try {
+    const response = await fetch('https://api.spotify.com/v1/me', {
+      headers: { Authorization: `Bearer ${req.accessToken}` },
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      res.status(response.status).json(data);
+      return;
+    }
+
+    res.json({
+      id: data.id,
+      displayName: data.display_name,
+      email: data.email,
+      image: data.images?.[0]?.url || null,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/playlists', requireAuth, async (req, res) => {
+  try {
+    const playlists = [];
+    let url = 'https://api.spotify.com/v1/me/playlists?limit=50';
+
+    while (url) {
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${req.accessToken}` },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        res.status(response.status).json(data);
+        return;
+      }
+
+      for (const playlist of data.items || []) {
+        playlists.push({
+          id: playlist.id,
+          name: playlist.name,
+          trackCount: playlist.tracks?.total || 0,
+          image: playlist.images?.[0]?.url || null,
+          owner: playlist.owner?.display_name || playlist.owner?.id,
+        });
+      }
+
+      url = data.next;
+    }
+
+    res.json({ playlists });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/playlists/:id/tracks', requireAuth, async (req, res) => {
+  try {
+    const playlistId = req.params.id;
+    if (!/^[A-Za-z0-9]+$/.test(playlistId)) {
+      res.status(400).json({ error: 'Invalid playlist id' });
+      return;
+    }
+
+    const tracks = [];
+    let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
+
+    while (url) {
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${req.accessToken}` },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        const message =
+          data.error?.message || data.error || 'Could not load playlist tracks from Spotify';
+        console.error('Spotify tracks error:', response.status, message);
+        res.status(response.status).json({ error: message });
+        return;
+      }
+
+      for (const item of data.items || []) {
+        const track = item.track;
+        if (!track?.uri) {
+          continue;
+        }
+        tracks.push({
+          id: track.id,
+          uri: track.uri,
+          name: track.name,
+          artists: (track.artists || []).map((artist) => artist.name).join(', '),
+          durationMs: track.duration_ms,
+          image: track.album?.images?.[track.album.images.length - 1]?.url || null,
+        });
+      }
+
+      url = data.next;
+    }
+
+    res.json({ tracks });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.listen(PORT, '127.0.0.1', () => {
+  console.log(`Server running on http://127.0.0.1:${PORT}`);
+  if (!SPOTIFY_CLIENT_SECRET) {
+    console.warn('Missing SPOTIFY_CLIENT_SECRET in backend/.env — login will not work until you add it.');
+  }
+});

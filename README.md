@@ -39,4 +39,36 @@ This app is for an all day event that will have different vibes and different si
 
 ---
 
+## How to run it
+
+On a Mac this is **Terminal** (Spotlight → Terminal), not Windows Command Prompt. You can also use the terminal panel in Cursor. You need **two** of them.
+
+**Terminal 1 — backend**
+
+```bash
+cd ~/seamless-dj-project/backend
+npm start
+```
+
+Wait until it says `Server running on http://127.0.0.1:5050`.
+
+**Terminal 2 — frontend**
+
+```bash
+cd ~/seamless-dj-project/frontend
+npm start
+```
+
+Wait until it says `Compiled successfully!`
+
+**Browser**
+
+Open **http://127.0.0.1:3000** (type that in the address bar; don’t use `localhost`). Click **Log in with Spotify**.
+
+In the Spotify developer app, the redirect URI must be `http://127.0.0.1:5050/callback`.
+
+Leave both terminals open. To stop, click each terminal and press `Control+C`.
+
+---
+
 
