@@ -249,7 +249,7 @@ app.get('/api/playlists', requireAuth, async (req, res) => {
         playlists.push({
           id: playlist.id,
           name: playlist.name,
-          trackCount: playlist.tracks?.total || 0,
+          trackCount: playlist.items?.total ?? playlist.tracks?.total ?? 0,
           image: playlist.images?.[0]?.url || null,
           owner: playlist.owner?.display_name || playlist.owner?.id,
         });
@@ -273,7 +273,7 @@ app.get('/api/playlists/:id/tracks', requireAuth, async (req, res) => {
     }
 
     const tracks = [];
-    let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
+    let url = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100`;
 
     while (url) {
       const response = await fetch(url, {
@@ -283,13 +283,13 @@ app.get('/api/playlists/:id/tracks', requireAuth, async (req, res) => {
       if (!response.ok) {
         const message =
           data.error?.message || data.error || 'Could not load playlist tracks from Spotify';
-        console.error('Spotify tracks error:', response.status, message);
+        console.error('Spotify tracks error:', response.status, message, data);
         res.status(response.status).json({ error: message });
         return;
       }
 
-      for (const item of data.items || []) {
-        const track = item.track;
+      for (const entry of data.items || []) {
+        const track = entry.item || entry.track;
         if (!track?.uri) {
           continue;
         }
