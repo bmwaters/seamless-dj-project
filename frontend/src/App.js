@@ -1,10 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './App.css';
+import { useSpotifyPlayer } from './useSpotifyPlayer';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:5050';
+const PLAY_CHUNK = 100;
 
 function storageKey(userId) {
   return `seamless-dj-sets-${userId}`;
+}
+
+function urisFromSets(sets, fromIndex) {
+  return sets
+    .slice(fromIndex)
+    .flatMap((set) => set.tracks.map((track) => track.uri))
+    .filter(Boolean);
 }
 
 function App() {
@@ -15,6 +24,20 @@ function App() {
   const [addingId, setAddingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [playingFromIndex, setPlayingFromIndex] = useState(null);
+  const remainingUris = useRef([]);
+  const currentChunk = useRef([]);
+  const wasPlaying = useRef(false);
+
+  const {
+    deviceId,
+    playerState,
+    playerError,
+    isPaused,
+    currentTrack,
+    togglePlay,
+    nextTrack,
+  } = useSpotifyPlayer(Boolean(user));
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -83,6 +106,75 @@ function App() {
     localStorage.setItem(storageKey(user.id), JSON.stringify(sets));
   }, [user, sets]);
 
+  async function playUris(uris) {
+    const response = await fetch(`${API_URL}/api/player/play`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId, uris }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'Could not start playback');
+    }
+  }
+
+  async function playChunk() {
+    const chunk = remainingUris.current.slice(0, PLAY_CHUNK);
+    remainingUris.current = remainingUris.current.slice(PLAY_CHUNK);
+    currentChunk.current = chunk;
+    if (chunk.length === 0) {
+      return;
+    }
+    await playUris(chunk);
+  }
+
+  async function playFromSet(index) {
+    if (!deviceId) {
+      setError('Player is still connecting. Wait a second, then try Play again.');
+      return;
+    }
+
+    const uris = urisFromSets(sets || [], index);
+    if (uris.length === 0) {
+      setError('That set has no playable songs yet.');
+      return;
+    }
+
+    setError(null);
+    remainingUris.current = uris;
+    setPlayingFromIndex(index);
+    try {
+      await playChunk();
+    } catch (playError) {
+      setError(playError.message);
+    }
+  }
+
+  useEffect(() => {
+    if (!playerState) {
+      return;
+    }
+
+    const currentUri = playerState.track_window?.current_track?.uri;
+    const lastUri = currentChunk.current[currentChunk.current.length - 1];
+    const reachedEnd =
+      playerState.paused &&
+      wasPlaying.current &&
+      currentUri &&
+      currentUri === lastUri &&
+      playerState.position === 0 &&
+      remainingUris.current.length > 0;
+
+    wasPlaying.current = !playerState.paused;
+
+    if (reachedEnd) {
+      playChunk().catch((playError) => setError(playError.message));
+    }
+    // playChunk is stable enough via refs; we only want this on player state ticks
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerState]);
+
   async function addPlaylist(playlist) {
     setError(null);
     setAddingId(playlist.id);
@@ -139,6 +231,22 @@ function App() {
     });
   }
 
+  async function onPlayPauseClick() {
+    if (isPaused && !currentTrack && (sets || []).some((set) => set.tracks.length > 0)) {
+      await playFromSet(0);
+      return;
+    }
+    try {
+      await togglePlay();
+    } catch (playError) {
+      setError(playError.message);
+    }
+  }
+
+  const hasSongs = (sets || []).some((set) => set.tracks.length > 0);
+  const nowPlayingName = currentTrack?.name;
+  const nowPlayingArtists = (currentTrack?.artists || []).map((artist) => artist.name).join(', ');
+
   return (
     <div className="app">
       <header className="header">
@@ -155,7 +263,39 @@ function App() {
         )}
       </header>
 
-      {error && <p className="error">{error}</p>}
+      {user && (
+        <div className="player-bar">
+          <div className="now-playing">
+            {nowPlayingName ? (
+              <>
+                <strong>{nowPlayingName}</strong>
+                <span>{nowPlayingArtists}</span>
+              </>
+            ) : (
+              <span>{deviceId ? 'Ready to play' : 'Connecting player…'}</span>
+            )}
+          </div>
+          <div className="player-controls">
+            <button
+              type="button"
+              className="play-main"
+              disabled={!deviceId || !hasSongs}
+              onClick={onPlayPauseClick}
+            >
+              {isPaused ? 'Play' : 'Pause'}
+            </button>
+            <button type="button" disabled={!deviceId || !currentTrack} onClick={nextTrack}>
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
+
+      {user?.product && user.product !== 'premium' && (
+        <p className="error">Spotify Premium is required to play music in this browser.</p>
+      )}
+
+      {(error || playerError) && <p className="error">{error || playerError}</p>}
 
       {loading && <p>Loading…</p>}
 
@@ -172,7 +312,10 @@ function App() {
             ) : (
               <ol className="sets">
                 {sets.map((set, index) => (
-                  <li key={set.id} className="set">
+                  <li
+                    key={set.id}
+                    className={`set${playingFromIndex === index ? ' set-active' : ''}`}
+                  >
                     <div className="set-row">
                       {set.image && (
                         <img src={set.image} alt="" width="48" height="48" />
@@ -184,6 +327,14 @@ function App() {
                       />
                       <span className="meta">{set.tracks.length} tracks</span>
                       <div className="set-actions">
+                        <button
+                          type="button"
+                          className="play-set"
+                          disabled={!deviceId || set.tracks.length === 0}
+                          onClick={() => playFromSet(index)}
+                        >
+                          Play
+                        </button>
                         <button
                           type="button"
                           disabled={index === 0}
@@ -217,7 +368,12 @@ function App() {
                           <li>No playable tracks in this playlist.</li>
                         ) : (
                           set.tracks.map((track, trackIndex) => (
-                            <li key={`${track.uri}-${trackIndex}`}>
+                            <li
+                              key={`${track.uri}-${trackIndex}`}
+                              className={
+                                currentTrack?.uri === track.uri ? 'track-current' : ''
+                              }
+                            >
                               {trackIndex + 1}. {track.name}
                               {track.artists ? ` — ${track.artists}` : ''}
                             </li>

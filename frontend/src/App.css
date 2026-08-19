@@ -44,6 +44,75 @@
   color: #b00020;
 }
 
+.player-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  background: #111;
+  color: #fff;
+  border-radius: 10px;
+}
+
+.now-playing {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.now-playing span {
+  color: #bbb;
+  font-size: 0.9rem;
+}
+
+.player-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.play-main,
+.play-set {
+  background: #1db954 !important;
+  border-color: #1db954 !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+
+.play-main {
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 0;
+  cursor: pointer;
+}
+
+.player-controls button {
+  border: 1px solid #555;
+  background: #333;
+  color: #fff;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.player-controls button:disabled,
+.play-set:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.set-active {
+  background: #f3fff6;
+}
+
+.track-current {
+  font-weight: 700;
+  color: #111;
+}
+
 .hint {
   color: #666;
 }

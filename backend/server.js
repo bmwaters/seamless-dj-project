@@ -13,8 +13,12 @@ const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 const SPOTIFY_REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI;
 const SPOTIFY_SCOPES = [
   'user-read-email',
+  'user-read-private',
   'playlist-read-private',
   'playlist-read-collaborative',
+  'streaming',
+  'user-read-playback-state',
+  'user-modify-playback-state',
 ].join(' ');
 
 const allowedOrigins = [
@@ -223,6 +227,7 @@ app.get('/api/me', requireAuth, async (req, res) => {
       id: data.id,
       displayName: data.display_name,
       email: data.email,
+      product: data.product,
       image: data.images?.[0]?.url || null,
     });
   } catch (error) {
@@ -307,6 +312,80 @@ app.get('/api/playlists/:id/tracks', requireAuth, async (req, res) => {
     }
 
     res.json({ tracks });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+function spotifyErrorMessage(data, fallback) {
+  return data.error?.message || data.error || fallback;
+}
+
+app.get('/api/token', requireAuth, (req, res) => {
+  res.json({ accessToken: req.accessToken });
+});
+
+app.put('/api/player/play', requireAuth, async (req, res) => {
+  try {
+    const { deviceId, uris } = req.body || {};
+    if (!deviceId || !Array.isArray(uris) || uris.length === 0) {
+      res.status(400).json({ error: 'A device and at least one song are required' });
+      return;
+    }
+
+    const limited = uris.filter((uri) => typeof uri === 'string').slice(0, 100);
+    const headers = {
+      Authorization: `Bearer ${req.accessToken}`,
+      'Content-Type': 'application/json',
+    };
+
+    await fetch('https://api.spotify.com/v1/me/player', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ device_ids: [deviceId], play: false }),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    const response = await fetch(
+      `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(deviceId)}`,
+      {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ uris: limited }),
+      }
+    );
+
+    if (!response.ok && response.status !== 204) {
+      const data = await response.json().catch(() => ({}));
+      const message = spotifyErrorMessage(data, 'Could not start playback');
+      console.error('Spotify play error:', response.status, message, data);
+      res.status(response.status).json({ error: message });
+      return;
+    }
+
+    res.json({ ok: true, queued: limited.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/player/pause', requireAuth, async (req, res) => {
+  try {
+    const deviceId = req.body?.deviceId;
+    const query = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : '';
+    const response = await fetch(`https://api.spotify.com/v1/me/player/pause${query}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${req.accessToken}` },
+    });
+
+    if (!response.ok && response.status !== 204) {
+      const data = await response.json().catch(() => ({}));
+      res.status(response.status).json({ error: spotifyErrorMessage(data, 'Could not pause') });
+      return;
+    }
+
+    res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
