@@ -18,6 +18,29 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:5050';
 const PLAY_CHUNK = 100;
 const DEFAULT_CUT_MS = 4000;
 
+let playlistLibraryRequest = null;
+
+function loadPlaylistLibrary() {
+  if (!playlistLibraryRequest) {
+    playlistLibraryRequest = fetch(`${API_URL}/api/playlists`, {
+      credentials: 'include',
+    }).then(async (response) => {
+      const playlistData = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          playlistData.error?.message ||
+            playlistData.error ||
+            (response.status === 429
+              ? 'Spotify is temporarily limiting playlist requests. Please try again shortly.'
+              : 'Could not load playlists')
+        );
+      }
+      return playlistData.playlists || [];
+    });
+  }
+  return playlistLibraryRequest;
+}
+
 function storageKey(userId) {
   return `seamless-dj-sets-${userId}`;
 }
@@ -138,20 +161,8 @@ function App() {
         const me = await meResponse.json();
         setUser(me);
 
-        const playlistResponse = await fetch(`${API_URL}/api/playlists`, {
-          credentials: 'include',
-        });
-        const playlistData = await playlistResponse.json().catch(() => ({}));
-        if (!playlistResponse.ok) {
-          throw new Error(
-            playlistData.error?.message ||
-              playlistData.error ||
-              (playlistResponse.status === 429
-                ? 'Spotify is temporarily limiting playlist requests. Please try again shortly.'
-                : 'Could not load playlists')
-          );
-        }
-        setPlaylists(playlistData.playlists || []);
+        const loadedPlaylists = await loadPlaylistLibrary();
+        setPlaylists(loadedPlaylists);
       } catch (loadError) {
         setError(loadError.message);
       } finally {
