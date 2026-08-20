@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import './App.css';
+import { playScratch, playSpinback, playWhoosh, unlockDjFx } from './djFx';
 import { useSpotifyPlayer } from './useSpotifyPlayer';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:5050';
 const PLAY_CHUNK = 100;
+const DEFAULT_CUT_MS = 4000;
 
 function storageKey(userId) {
   return `seamless-dj-sets-${userId}`;
@@ -16,6 +18,16 @@ function urisFromSets(sets, fromIndex) {
     .filter(Boolean);
 }
 
+function formatTime(ms) {
+  if (!ms || ms < 0) {
+    return '0:00';
+  }
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [playlists, setPlaylists] = useState([]);
@@ -25,9 +37,33 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [playingFromIndex, setPlayingFromIndex] = useState(null);
+  const [fadeEnabled, setFadeEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('seamless-dj-fade') === 'on';
+    } catch {
+      return false;
+    }
+  });
+  const [scrubbing, setScrubbing] = useState(false);
+  const [scrubPosition, setScrubPosition] = useState(0);
   const remainingUris = useRef([]);
   const currentChunk = useRef([]);
   const wasPlaying = useRef(false);
+  const setsRef = useRef(sets);
+  setsRef.current = sets;
+
+  function getSkipAtMs(uri, duration) {
+    if (!uri || !duration) {
+      return null;
+    }
+    for (const set of setsRef.current || []) {
+      const marked = set.tracks.find((track) => track.uri === uri && track.mixOutMs != null);
+      if (marked) {
+        return Math.min(marked.mixOutMs, duration - 200);
+      }
+    }
+    return Math.max(0, duration - DEFAULT_CUT_MS);
+  }
 
   const {
     deviceId,
@@ -35,9 +71,13 @@ function App() {
     playerError,
     isPaused,
     currentTrack,
+    positionMs,
+    durationMs,
     togglePlay,
     nextTrack,
-  } = useSpotifyPlayer(Boolean(user));
+    previousTrack,
+    seek,
+  } = useSpotifyPlayer(Boolean(user), fadeEnabled, playWhoosh, getSkipAtMs);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -106,6 +146,10 @@ function App() {
     localStorage.setItem(storageKey(user.id), JSON.stringify(sets));
   }, [user, sets]);
 
+  useEffect(() => {
+    localStorage.setItem('seamless-dj-fade', fadeEnabled ? 'on' : 'off');
+  }, [fadeEnabled]);
+
   async function playUris(uris) {
     const response = await fetch(`${API_URL}/api/player/play`, {
       method: 'PUT',
@@ -130,6 +174,7 @@ function App() {
   }
 
   async function playFromSet(index) {
+    await unlockDjFx();
     if (!deviceId) {
       setError('Player is still connecting. Wait a second, then try Play again.');
       return;
@@ -231,7 +276,58 @@ function App() {
     });
   }
 
+  function currentMixOutMs() {
+    const uri = currentTrack?.uri;
+    if (!uri) {
+      return null;
+    }
+    for (const set of sets || []) {
+      const track = set.tracks.find((item) => item.uri === uri);
+      if (track?.mixOutMs != null) {
+        return track.mixOutMs;
+      }
+    }
+    return null;
+  }
+
+  function updateCurrentMixOut(mixOutMs) {
+    const uri = currentTrack?.uri;
+    if (!uri) {
+      return;
+    }
+    setSets((current) =>
+      (current || []).map((set) => ({
+        ...set,
+        tracks: set.tracks.map((track) =>
+          track.uri === uri ? { ...track, mixOutMs } : track
+        ),
+      }))
+    );
+  }
+
+  function markMixOut() {
+    const position = scrubbing ? scrubPosition : positionMs;
+    if (!currentTrack || !durationMs) {
+      return;
+    }
+    updateCurrentMixOut(Math.max(2000, Math.min(position, durationMs - 200)));
+  }
+
+  function clearMixOut() {
+    updateCurrentMixOut(undefined);
+  }
+
+  async function onSeekCommit(value) {
+    setScrubbing(false);
+    try {
+      await seek(value);
+    } catch (seekError) {
+      setError(seekError.message);
+    }
+  }
+
   async function onPlayPauseClick() {
+    await unlockDjFx();
     if (isPaused && !currentTrack && (sets || []).some((set) => set.tracks.length > 0)) {
       await playFromSet(0);
       return;
@@ -246,6 +342,7 @@ function App() {
   const hasSongs = (sets || []).some((set) => set.tracks.length > 0);
   const nowPlayingName = currentTrack?.name;
   const nowPlayingArtists = (currentTrack?.artists || []).map((artist) => artist.name).join(', ');
+  const mixOutMs = currentMixOutMs();
 
   return (
     <div className="app">
@@ -275,7 +372,56 @@ function App() {
               <span>{deviceId ? 'Ready to play' : 'Connecting player…'}</span>
             )}
           </div>
+          <div className="seek">
+            <span>{formatTime(scrubbing ? scrubPosition : positionMs)}</span>
+            <input
+              type="range"
+              min="0"
+              max={durationMs || 0}
+              value={scrubbing ? scrubPosition : Math.min(positionMs, durationMs || 0)}
+              disabled={!currentTrack || !durationMs}
+              aria-label="Song position"
+              onChange={(event) => {
+                setScrubbing(true);
+                setScrubPosition(Number(event.target.value));
+              }}
+              onMouseUp={(event) => onSeekCommit(Number(event.target.value))}
+              onTouchEnd={(event) => onSeekCommit(Number(event.target.value))}
+              onKeyUp={(event) => onSeekCommit(Number(event.target.value))}
+            />
+            <span>{formatTime(durationMs)}</span>
+            <button
+              type="button"
+              className="fx-btn"
+              disabled={!currentTrack || !durationMs}
+              onClick={mixOutMs == null ? markMixOut : clearMixOut}
+            >
+              {mixOutMs == null ? 'Set mix-out' : `Clear mix-out (${formatTime(mixOutMs)})`}
+            </button>
+          </div>
           <div className="player-controls">
+            <label className={`fade-toggle${fadeEnabled ? ' on' : ''}`}>
+              <input
+                type="checkbox"
+                checked={fadeEnabled}
+                onChange={(event) => setFadeEnabled(event.target.checked)}
+              />
+              <span className="fade-switch" aria-hidden="true" />
+              Tight mix
+            </label>
+            <button type="button" className="fx-btn" onClick={playScratch}>
+              Scratch
+            </button>
+            <button type="button" className="fx-btn" onClick={playSpinback}>
+              Spinback
+            </button>
+            <button
+              type="button"
+              disabled={!deviceId || !currentTrack}
+              onClick={previousTrack}
+            >
+              Previous
+            </button>
             <button
               type="button"
               className="play-main"
@@ -376,6 +522,7 @@ function App() {
                             >
                               {trackIndex + 1}. {track.name}
                               {track.artists ? ` — ${track.artists}` : ''}
+                              {track.mixOutMs != null ? ` (mix-out ${formatTime(track.mixOutMs)})` : ''}
                             </li>
                           ))
                         )}

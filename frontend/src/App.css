@@ -48,8 +48,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
   margin-bottom: 20px;
   padding: 12px 14px;
   background: #111;
@@ -61,7 +60,9 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 0;
+  min-width: 120px;
+  max-width: 220px;
+  flex: 0 1 180px;
 }
 
 .now-playing span {
@@ -69,9 +70,113 @@
   font-size: 0.9rem;
 }
 
+.seek {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 180px;
+  min-width: 140px;
+  font-size: 0.75rem;
+  color: #bbb;
+  font-variant-numeric: tabular-nums;
+}
+
+.seek input[type='range'] {
+  flex: 1;
+  height: 4px;
+  appearance: none;
+  background: #444;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+
+.seek input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+}
+
+.seek input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+}
+
+.seek input[type='range']:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.seek .fx-btn {
+  flex-shrink: 0;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
 .player-controls {
   display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.fade-toggle {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  font-size: 0.8rem;
+  color: #ccc;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.fade-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fade-switch {
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: #444;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.fade-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.fade-toggle.on {
+  color: #fff;
+}
+
+.fade-toggle.on .fade-switch {
+  background: #1db954;
+}
+
+.fade-toggle.on .fade-switch::after {
+  left: 16px;
 }
 
 .play-main,
@@ -102,6 +207,13 @@
 .play-set:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.fx-btn {
+  background: #2a2a2a !important;
+  border-color: #555 !important;
+  color: #eee !important;
+  font-weight: 600;
 }
 
 .set-active {
