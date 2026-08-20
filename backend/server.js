@@ -136,6 +136,53 @@ async function requireAuth(req, res, next) {
   }
 }
 
+async function mapLimit(items, limit, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  }
+
+  const workerCount = Math.min(limit, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
+async function playlistLastAddedAt(accessToken, playlistId, trackCount) {
+  if (!playlistId || !trackCount) {
+    return null;
+  }
+
+  const limit = Math.min(20, trackCount);
+  const offset = Math.max(0, trackCount - limit);
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+    fields: 'items(added_at)',
+  });
+  const response = await fetch(
+    `https://api.spotify.com/v1/playlists/${playlistId}/items?${params}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = await response.json();
+  let latest = null;
+  for (const item of data.items || []) {
+    if (item?.added_at && (!latest || item.added_at > latest)) {
+      latest = item.added_at;
+    }
+  }
+  return latest;
+}
+
 app.get('/', (req, res) => {
   res.send('Seamless DJ Project Backend Running');
 });
@@ -237,6 +284,15 @@ app.get('/api/me', requireAuth, async (req, res) => {
 
 app.get('/api/playlists', requireAuth, async (req, res) => {
   try {
+    const meResponse = await fetch('https://api.spotify.com/v1/me', {
+      headers: { Authorization: `Bearer ${req.accessToken}` },
+    });
+    const me = await meResponse.json();
+    if (!meResponse.ok) {
+      res.status(meResponse.status).json(me);
+      return;
+    }
+
     const playlists = [];
     let url = 'https://api.spotify.com/v1/me/playlists?limit=50';
 
@@ -251,17 +307,49 @@ app.get('/api/playlists', requireAuth, async (req, res) => {
       }
 
       for (const playlist of data.items || []) {
+        if (!playlist?.id) {
+          continue;
+        }
         playlists.push({
           id: playlist.id,
-          name: playlist.name,
+          name: playlist.name || 'Untitled playlist',
+          description: playlist.description || '',
           trackCount: playlist.items?.total ?? playlist.tracks?.total ?? 0,
           image: playlist.images?.[0]?.url || null,
-          owner: playlist.owner?.display_name || playlist.owner?.id,
+          owner: playlist.owner?.display_name || playlist.owner?.id || '',
+          ownerId: playlist.owner?.id || null,
+          mine: playlist.owner?.id === me.id,
+          lastAddedAt: null,
         });
       }
 
       url = data.next;
     }
+
+    const owned = playlists.filter((playlist) => playlist.mine && playlist.trackCount > 0);
+    await mapLimit(owned, 6, async (playlist) => {
+      playlist.lastAddedAt = await playlistLastAddedAt(
+        req.accessToken,
+        playlist.id,
+        playlist.trackCount
+      );
+    });
+
+    playlists.sort((a, b) => {
+      if (a.mine !== b.mine) {
+        return a.mine ? -1 : 1;
+      }
+      if (a.lastAddedAt !== b.lastAddedAt) {
+        if (!a.lastAddedAt) {
+          return 1;
+        }
+        if (!b.lastAddedAt) {
+          return -1;
+        }
+        return a.lastAddedAt < b.lastAddedAt ? 1 : -1;
+      }
+      return a.name.localeCompare(b.name);
+    });
 
     res.json({ playlists });
   } catch (error) {

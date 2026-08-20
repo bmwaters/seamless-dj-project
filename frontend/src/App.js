@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import './App.css';
-import { playHypeSpins, playScratch, playSpinback, playWhoosh, unlockDjFx } from './djFx';
+import {
+  playAirhorn,
+  playEchoOut,
+  playHypeSpins,
+  playImpact,
+  playScratch,
+  playSiren,
+  playSpinback,
+  playVinylStop,
+  playWhoosh,
+  unlockDjFx,
+} from './djFx';
 import { useSpotifyPlayer } from './useSpotifyPlayer';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:5050';
@@ -16,6 +27,24 @@ function urisFromSets(sets, fromIndex) {
     .slice(fromIndex)
     .flatMap((set) => set.tracks.map((track) => track.uri))
     .filter(Boolean);
+}
+
+function normalizeSearch(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function playlistMatchesQuery(playlist, query) {
+  const words = normalizeSearch(query).split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    return true;
+  }
+  const haystack = normalizeSearch(
+    [playlist.name, playlist.owner, playlist.description].filter(Boolean).join(' ')
+  );
+  return words.every((word) => haystack.includes(word));
 }
 
 function formatTime(ms) {
@@ -34,6 +63,8 @@ function App() {
   const [sets, setSets] = useState(null);
   const [openSetId, setOpenSetId] = useState(null);
   const [addingId, setAddingId] = useState(null);
+  const [playlistQuery, setPlaylistQuery] = useState('');
+  const [playlistOpen, setPlaylistOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [playingFromIndex, setPlayingFromIndex] = useState(null);
@@ -49,6 +80,7 @@ function App() {
   const remainingUris = useRef([]);
   const currentChunk = useRef([]);
   const wasPlaying = useRef(false);
+  const playlistPickerRef = useRef(null);
   const setsRef = useRef(sets);
   setsRef.current = sets;
 
@@ -150,6 +182,17 @@ function App() {
     localStorage.setItem('seamless-dj-fade', fadeEnabled ? 'on' : 'off');
   }, [fadeEnabled]);
 
+  useEffect(() => {
+    function closePicker(event) {
+      if (playlistPickerRef.current && !playlistPickerRef.current.contains(event.target)) {
+        setPlaylistOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', closePicker);
+    return () => document.removeEventListener('mousedown', closePicker);
+  }, []);
+
   async function playUris(uris) {
     const response = await fetch(`${API_URL}/api/player/play`, {
       method: 'PUT',
@@ -243,6 +286,8 @@ function App() {
 
       setSets((current) => [...(current || []), nextSet]);
       setOpenSetId(nextSet.id);
+      setPlaylistQuery('');
+      setPlaylistOpen(false);
     } catch (addError) {
       setError(addError.message);
     } finally {
@@ -343,6 +388,11 @@ function App() {
   const nowPlayingName = currentTrack?.name;
   const nowPlayingArtists = (currentTrack?.artists || []).map((artist) => artist.name).join(', ');
   const mixOutMs = currentMixOutMs();
+  const playlistMatches = playlists.filter((playlist) =>
+    playlistMatchesQuery(playlist, playlistQuery)
+  );
+  const showPlaylistMenu =
+    playlistOpen && playlists.length > 0;
 
   return (
     <div className="app">
@@ -409,15 +459,6 @@ function App() {
               <span className="fade-switch" aria-hidden="true" />
               Tight mix
             </label>
-            <button type="button" className="fx-btn" onClick={playScratch}>
-              Scratch
-            </button>
-            <button type="button" className="fx-btn" onClick={playSpinback}>
-              Spinback
-            </button>
-            <button type="button" className="fx-btn" onClick={playHypeSpins}>
-              Hype
-            </button>
             <button
               type="button"
               disabled={!deviceId || !currentTrack}
@@ -440,6 +481,43 @@ function App() {
         </div>
       )}
 
+      {user && (
+        <div className="fx-pads">
+          <div className="fx-pad-cell">
+            <span>Scratch</span>
+            <button type="button" className="fx-pad" onClick={playScratch} aria-label="Scratch" />
+          </div>
+          <div className="fx-pad-cell">
+            <span>Spinback</span>
+            <button type="button" className="fx-pad" onClick={playSpinback} aria-label="Spinback" />
+          </div>
+          <div className="fx-pad-cell">
+            <span>Hype</span>
+            <button type="button" className="fx-pad" onClick={playHypeSpins} aria-label="Hype" />
+          </div>
+          <div className="fx-pad-cell">
+            <span>Airhorn</span>
+            <button type="button" className="fx-pad" onClick={playAirhorn} aria-label="Airhorn" />
+          </div>
+          <div className="fx-pad-cell">
+            <span>Vinyl stop</span>
+            <button type="button" className="fx-pad" onClick={playVinylStop} aria-label="Vinyl stop" />
+          </div>
+          <div className="fx-pad-cell">
+            <span>Siren</span>
+            <button type="button" className="fx-pad" onClick={playSiren} aria-label="Siren" />
+          </div>
+          <div className="fx-pad-cell">
+            <span>Impact</span>
+            <button type="button" className="fx-pad" onClick={playImpact} aria-label="Impact" />
+          </div>
+          <div className="fx-pad-cell">
+            <span>Echo out</span>
+            <button type="button" className="fx-pad" onClick={playEchoOut} aria-label="Echo out" />
+          </div>
+        </div>
+      )}
+
       {user?.product && user.product !== 'premium' && (
         <p className="error">Spotify Premium is required to play music in this browser.</p>
       )}
@@ -455,9 +533,65 @@ function App() {
       {user && sets !== null && (
         <div className="layout">
           <section>
-            <h2>Today’s run-of-show</h2>
+            <div className="section-heading">
+              <h2>Today’s run-of-show</h2>
+              <div className="playlist-picker" ref={playlistPickerRef}>
+              <input
+                type="text"
+                autoComplete="off"
+                spellCheck="false"
+                placeholder="Search playlists by name"
+                value={playlistQuery}
+                disabled={playlists.length === 0}
+                onChange={(event) => {
+                  setPlaylistQuery(event.target.value);
+                  setPlaylistOpen(true);
+                }}
+                onFocus={() => setPlaylistOpen(true)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setPlaylistOpen(false);
+                  }
+                }}
+                aria-label="Search Spotify playlists"
+              />
+              {playlists.length === 0 && (
+                <p className="hint">No playlists found on this account.</p>
+              )}
+              {showPlaylistMenu && (
+                <ul className="playlists playlist-dropdown">
+                  {playlistMatches.length === 0 ? (
+                    <li className="playlist-empty">No playlists match those words.</li>
+                  ) : (
+                    playlistMatches.map((playlist) => (
+                      <li key={playlist.id}>
+                        {playlist.image && (
+                          <img src={playlist.image} alt="" width="40" height="40" />
+                        )}
+                        <div>
+                          <strong>{playlist.name}</strong>
+                          <span>
+                            {playlist.mine ? 'Yours' : playlist.owner || 'Followed'}
+                            {playlist.trackCount != null ? ` · ${playlist.trackCount} tracks` : ''}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={addingId === playlist.id}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => addPlaylist(playlist)}
+                        >
+                          {addingId === playlist.id ? 'Adding…' : 'Add'}
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              )}
+              </div>
+            </div>
             {sets.length === 0 ? (
-              <p className="hint">Click Add on a playlist to stack sets for the day. You can rename each one.</p>
+              <p className="hint">Search a playlist to stack sets for the day. You can rename each one.</p>
             ) : (
               <ol className="sets">
                 {sets.map((set, index) => (
@@ -534,34 +668,6 @@ function App() {
                   </li>
                 ))}
               </ol>
-            )}
-          </section>
-
-          <section>
-            <h2>Your Spotify playlists</h2>
-            {playlists.length === 0 ? (
-              <p>No playlists found on this account.</p>
-            ) : (
-              <ul className="playlists">
-                {playlists.map((playlist) => (
-                  <li key={playlist.id}>
-                    {playlist.image && (
-                      <img src={playlist.image} alt="" width="48" height="48" />
-                    )}
-                    <div>
-                      <strong>{playlist.name}</strong>
-                      <span>{playlist.owner ? playlist.owner : 'Spotify playlist'}</span>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={addingId === playlist.id}
-                      onClick={() => addPlaylist(playlist)}
-                    >
-                      {addingId === playlist.id ? 'Adding…' : 'Add'}
-                    </button>
-                  </li>
-                ))}
-              </ul>
             )}
           </section>
         </div>
