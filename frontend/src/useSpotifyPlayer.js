@@ -36,7 +36,10 @@ export function useSpotifyPlayer(enabled, fadeEnabled = false, onFadeTransition,
   const fadeEnabledRef = useRef(fadeEnabled);
   const lastUri = useRef(null);
   const skippingOutro = useRef(false);
+  const pendingFadeIn = useRef(false);
   const lastTick = useRef({ position: 0, at: 0, duration: 0 });
+  const lastFadeVolume = useRef(1);
+  const fadeToken = useRef(0);
   const onFadeTransitionRef = useRef(onFadeTransition);
   const getSkipAtMsRef = useRef(getSkipAtMs);
 
@@ -45,8 +48,28 @@ export function useSpotifyPlayer(enabled, fadeEnabled = false, onFadeTransition,
   getSkipAtMsRef.current = getSkipAtMs;
 
   async function restoreVolume() {
+    fadeToken.current += 1;
     skippingOutro.current = false;
+    pendingFadeIn.current = false;
+    lastFadeVolume.current = 1;
     await playerRef.current?.setVolume(1);
+  }
+
+  async function fadeInVolume(player) {
+    const token = fadeToken.current + 1;
+    fadeToken.current = token;
+    lastFadeVolume.current = 0.08;
+    await player.setVolume(0.08);
+    const steps = 10;
+    for (let i = 1; i <= steps; i += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 90));
+      if (token !== fadeToken.current) {
+        return;
+      }
+      const volume = 0.08 + (0.92 * i) / steps;
+      lastFadeVolume.current = volume;
+      await player.setVolume(volume);
+    }
   }
 
   useEffect(() => {
@@ -157,7 +180,16 @@ export function useSpotifyPlayer(enabled, fadeEnabled = false, onFadeTransition,
       if (uri && uri !== lastUri.current) {
         lastUri.current = uri;
         lastTick.current = { position: state.position || 0, at: now, duration };
-        await restoreVolume();
+        if (pendingFadeIn.current && fadeEnabledRef.current) {
+          pendingFadeIn.current = false;
+          skippingOutro.current = false;
+          await fadeInVolume(player);
+        } else {
+          pendingFadeIn.current = false;
+          skippingOutro.current = false;
+          lastFadeVolume.current = 1;
+          await player.setVolume(1);
+        }
         return;
       }
 
@@ -170,16 +202,29 @@ export function useSpotifyPlayer(enabled, fadeEnabled = false, onFadeTransition,
       }
 
       const skipAt = getSkipAtMsRef.current?.(uri, duration);
-      if (
-        skipAt != null &&
-        skipAt >= 2000 &&
-        duration - skipAt >= 80 &&
-        position >= skipAt
-      ) {
+      if (skipAt == null || skipAt < 2000 || duration - skipAt < 80) {
+        return;
+      }
+
+      const fadeMs = 1400;
+      const fadeStart = Math.max(0, skipAt - fadeMs);
+
+      if (position >= skipAt) {
         skippingOutro.current = true;
-        await player.setVolume(1);
-        await onFadeTransitionRef.current?.();
+        pendingFadeIn.current = true;
+        lastFadeVolume.current = 0.05;
+        await player.setVolume(0.05);
         await player.nextTrack();
+        return;
+      }
+
+      if (position >= fadeStart && skipAt > fadeStart) {
+        const progress = (position - fadeStart) / (skipAt - fadeStart);
+        const volume = Math.max(0.05, 1 - progress);
+        if (Math.abs(volume - lastFadeVolume.current) >= 0.04) {
+          lastFadeVolume.current = volume;
+          await player.setVolume(volume);
+        }
       }
     }, 50);
 

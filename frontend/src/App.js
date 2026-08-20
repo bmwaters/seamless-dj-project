@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import './App.css';
 import {
   playAirhorn,
+  playApplause,
+  playChime,
   playEchoOut,
   playHypeSpins,
   playImpact,
   playScratch,
-  playSiren,
   playSpinback,
   playVinylStop,
-  playWhoosh,
   unlockDjFx,
 } from './djFx';
 import { useSpotifyPlayer } from './useSpotifyPlayer';
@@ -109,7 +109,7 @@ function App() {
     nextTrack,
     previousTrack,
     seek,
-  } = useSpotifyPlayer(Boolean(user), fadeEnabled, playWhoosh, getSkipAtMs);
+  } = useSpotifyPlayer(Boolean(user), fadeEnabled, null, getSkipAtMs);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -141,12 +141,17 @@ function App() {
         const playlistResponse = await fetch(`${API_URL}/api/playlists`, {
           credentials: 'include',
         });
+        const playlistData = await playlistResponse.json().catch(() => ({}));
         if (!playlistResponse.ok) {
-          throw new Error('Could not load playlists');
+          throw new Error(
+            playlistData.error?.message ||
+              playlistData.error ||
+              (playlistResponse.status === 429
+                ? 'Spotify is temporarily limiting playlist requests. Please try again shortly.'
+                : 'Could not load playlists')
+          );
         }
-
-        const data = await playlistResponse.json();
-        setPlaylists(data.playlists || []);
+        setPlaylists(playlistData.playlists || []);
       } catch (loadError) {
         setError(loadError.message);
       } finally {
@@ -485,35 +490,39 @@ function App() {
         <div className="fx-pads">
           <div className="fx-pad-cell">
             <span>Scratch</span>
-            <button type="button" className="fx-pad" onClick={playScratch} aria-label="Scratch" />
+            <button type="button" className="fx-pad fx-scratch" onClick={playScratch} aria-label="Scratch" />
           </div>
           <div className="fx-pad-cell">
             <span>Spinback</span>
-            <button type="button" className="fx-pad" onClick={playSpinback} aria-label="Spinback" />
+            <button type="button" className="fx-pad fx-spinback" onClick={playSpinback} aria-label="Spinback" />
           </div>
           <div className="fx-pad-cell">
             <span>Hype</span>
-            <button type="button" className="fx-pad" onClick={playHypeSpins} aria-label="Hype" />
+            <button type="button" className="fx-pad fx-hype" onClick={playHypeSpins} aria-label="Hype" />
           </div>
           <div className="fx-pad-cell">
-            <span>Airhorn</span>
-            <button type="button" className="fx-pad" onClick={playAirhorn} aria-label="Airhorn" />
+            <span>Applause</span>
+            <button type="button" className="fx-pad fx-applause" onClick={playApplause} aria-label="Applause" />
+          </div>
+          <div className="fx-pad-cell">
+            <span>Air horn</span>
+            <button type="button" className="fx-pad fx-airhorn" onClick={playAirhorn} aria-label="Air horn" />
           </div>
           <div className="fx-pad-cell">
             <span>Vinyl stop</span>
-            <button type="button" className="fx-pad" onClick={playVinylStop} aria-label="Vinyl stop" />
+            <button type="button" className="fx-pad fx-vinyl" onClick={playVinylStop} aria-label="Vinyl stop" />
           </div>
           <div className="fx-pad-cell">
-            <span>Siren</span>
-            <button type="button" className="fx-pad" onClick={playSiren} aria-label="Siren" />
+            <span>Chime</span>
+            <button type="button" className="fx-pad fx-chime" onClick={playChime} aria-label="Chime" />
           </div>
           <div className="fx-pad-cell">
             <span>Impact</span>
-            <button type="button" className="fx-pad" onClick={playImpact} aria-label="Impact" />
+            <button type="button" className="fx-pad fx-impact" onClick={playImpact} aria-label="Impact" />
           </div>
           <div className="fx-pad-cell">
             <span>Echo out</span>
-            <button type="button" className="fx-pad" onClick={playEchoOut} aria-label="Echo out" />
+            <button type="button" className="fx-pad fx-echo" onClick={playEchoOut} aria-label="Echo out" />
           </div>
         </div>
       )}
@@ -534,7 +543,7 @@ function App() {
         <div className="layout">
           <section>
             <div className="section-heading">
-              <h2>Today’s run-of-show</h2>
+              <h2>Event Flow</h2>
               <div className="playlist-picker" ref={playlistPickerRef}>
               <input
                 type="text"
@@ -555,8 +564,11 @@ function App() {
                 }}
                 aria-label="Search Spotify playlists"
               />
-              {playlists.length === 0 && (
+              {playlists.length === 0 && !error && (
                 <p className="hint">No playlists found on this account.</p>
+              )}
+              {playlists.length === 0 && error && (
+                <p className="hint">Playlist search couldn’t load. Refresh and try again.</p>
               )}
               {showPlaylistMenu && (
                 <ul className="playlists playlist-dropdown">
@@ -591,7 +603,7 @@ function App() {
               </div>
             </div>
             {sets.length === 0 ? (
-              <p className="hint">Search a playlist to stack sets for the day. You can rename each one.</p>
+              <p className="hint">Search a playlist to stack sets for the event. You can rename each one.</p>
             ) : (
               <ol className="sets">
                 {sets.map((set, index) => (

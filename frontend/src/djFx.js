@@ -1,6 +1,17 @@
 let audioContext = null;
 let fxMaster = null;
-let airhornCurve = null;
+const bufferCache = new Map();
+
+const FX_FILES = {
+  scratch: '/fx/scratch.wav',
+  applause: '/fx/applause.wav',
+  hype: '/fx/hype.wav',
+  airhorn: '/fx/airhorn.wav',
+  vinylStop: '/fx/vinyl-stop.wav',
+  chime: '/fx/chime.wav',
+  impact: '/fx/impact.wav',
+  echoOut: '/fx/echo-out.wav',
+};
 
 function getContext() {
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -30,7 +41,7 @@ function getFxMaster(ctx) {
   compressor.release.value = 0.15;
 
   const output = ctx.createGain();
-  output.gain.value = 2.6;
+  output.gain.value = 2.4;
 
   input.connect(compressor);
   compressor.connect(output);
@@ -44,16 +55,6 @@ export async function unlockDjFx() {
   if (ctx && ctx.state === 'suspended') {
     await ctx.resume();
   }
-}
-
-function noiseBuffer(ctx, seconds) {
-  const length = Math.floor(ctx.sampleRate * seconds);
-  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < length; i += 1) {
-    data[i] = Math.random() * 2 - 1;
-  }
-  return buffer;
 }
 
 function playNoiseSweep({ startFreq, endFreq, duration, peakGain, q, delay = 0 }) {
@@ -84,40 +85,52 @@ function playNoiseSweep({ startFreq, endFreq, duration, peakGain, q, delay = 0 }
   source.stop(now + duration + 0.02);
 }
 
-export async function playWhoosh() {
+function noiseBuffer(ctx, seconds) {
+  const length = Math.floor(ctx.sampleRate * seconds);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i += 1) {
+    data[i] = Math.random() * 2 - 1;
+  }
+  return buffer;
+}
+
+async function loadBuffer(ctx, url) {
+  if (bufferCache.has(url)) {
+    return bufferCache.get(url);
+  }
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Missing FX file: ${url}`);
+  }
+  const data = await response.arrayBuffer();
+  const buffer = await ctx.decodeAudioData(data.slice(0));
+  bufferCache.set(url, buffer);
+  return buffer;
+}
+
+async function playSample(url, volume = 1) {
   await unlockDjFx();
-  playNoiseSweep({
-    startFreq: 220,
-    endFreq: 4800,
-    duration: 3,
-    peakGain: 1.1,
-    q: 1.2,
-  });
+  const ctx = getContext();
+  if (!ctx) {
+    return;
+  }
+  const buffer = await loadBuffer(ctx, url);
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  const gain = ctx.createGain();
+  gain.gain.value = volume;
+  source.connect(gain);
+  gain.connect(getFxMaster(ctx));
+  source.start();
 }
 
 export async function playScratch() {
-  await unlockDjFx();
-  const bursts = [
-    { startFreq: 1800, endFreq: 420, delay: 0 },
-    { startFreq: 700, endFreq: 2400, delay: 0.35 },
-    { startFreq: 2100, endFreq: 380, delay: 0.7 },
-    { startFreq: 900, endFreq: 2600, delay: 1.1 },
-    { startFreq: 1600, endFreq: 450, delay: 1.45 },
-    { startFreq: 800, endFreq: 2200, delay: 1.85 },
-    { startFreq: 1900, endFreq: 360, delay: 2.2 },
-    { startFreq: 650, endFreq: 2000, delay: 2.6 },
-  ];
+  await playSample(FX_FILES.scratch, 1.15);
+}
 
-  bursts.forEach((burst) => {
-    playNoiseSweep({
-      startFreq: burst.startFreq,
-      endFreq: burst.endFreq,
-      duration: 0.22,
-      peakGain: 1.6,
-      q: 2.4,
-      delay: burst.delay,
-    });
-  });
+export async function playApplause() {
+  await playSample(FX_FILES.applause, 1.05);
 }
 
 function playSpinHit(startAt, duration, startFreq, endFreq, oscGainLevel, noiseGain) {
@@ -174,199 +187,22 @@ export async function playHypeSpins() {
   });
 }
 
-function getAirhornCurve() {
-  if (airhornCurve) {
-    return airhornCurve;
-  }
-  const samples = 44100;
-  const curve = new Float32Array(samples);
-  for (let i = 0; i < samples; i += 1) {
-    const x = (i * 2) / samples - 1;
-    curve[i] = Math.tanh(x * 6);
-  }
-  airhornCurve = curve;
-  return airhornCurve;
-}
-
-function playAirhornBlast(startAt, duration, startFreq, endFreq) {
-  const ctx = getContext();
-  if (!ctx) {
-    return;
-  }
-
-  const mix = ctx.createGain();
-  mix.gain.value = 0.7;
-
-  const shaper = ctx.createWaveShaper();
-  shaper.curve = getAirhornCurve();
-  shaper.oversample = '4x';
-
-  const highpass = ctx.createBiquadFilter();
-  highpass.type = 'highpass';
-  highpass.frequency.value = 180;
-
-  const band = ctx.createBiquadFilter();
-  band.type = 'bandpass';
-  band.Q.value = 0.7;
-  band.frequency.setValueAtTime(2600, startAt);
-  band.frequency.exponentialRampToValueAtTime(720, startAt + duration);
-
-  const env = ctx.createGain();
-  env.gain.setValueAtTime(0.0001, startAt);
-  env.gain.exponentialRampToValueAtTime(2.4, startAt + 0.008);
-  env.gain.setValueAtTime(2.2, startAt + Math.max(0.04, duration - 0.07));
-  env.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
-
-  // Downward "bwa" scoop on a brassy dual-tone horn.
-  const ratios = [1, 1.24, 2, 2.48];
-  const types = ['square', 'square', 'sawtooth', 'square'];
-  ratios.forEach((ratio, index) => {
-    const osc = ctx.createOscillator();
-    osc.type = types[index];
-    osc.frequency.setValueAtTime(startFreq * ratio, startAt);
-    osc.frequency.exponentialRampToValueAtTime(endFreq * ratio, startAt + duration);
-    osc.connect(mix);
-    osc.start(startAt);
-    osc.stop(startAt + duration + 0.02);
-  });
-
-  playNoiseSweep({
-    startFreq: 1800,
-    endFreq: 400,
-    duration: Math.min(duration, 0.16),
-    peakGain: 0.55,
-    q: 1.4,
-    delay: Math.max(0, startAt - ctx.currentTime),
-  });
-
-  mix.connect(shaper);
-  shaper.connect(highpass);
-  highpass.connect(band);
-  band.connect(env);
-  env.connect(getFxMaster(ctx));
-}
-
 export async function playAirhorn() {
-  await unlockDjFx();
-  const ctx = getContext();
-  if (!ctx) {
-    return;
-  }
-  const now = ctx.currentTime;
-  playAirhornBlast(now, 0.11, 700, 310);
-  playAirhornBlast(now + 0.15, 0.11, 700, 310);
-  playAirhornBlast(now + 0.3, 0.11, 700, 310);
-  playAirhornBlast(now + 0.45, 0.78, 660, 270);
+  await playSample(FX_FILES.airhorn, 1.2);
 }
 
 export async function playVinylStop() {
-  await unlockDjFx();
-  const ctx = getContext();
-  if (!ctx) {
-    return;
-  }
-  playSpinHit(ctx.currentTime, 0.85, 420, 28, 0.32, 0.75);
+  await playSample(FX_FILES.vinylStop, 1.1);
 }
 
-export async function playSiren() {
-  await unlockDjFx();
-  const ctx = getContext();
-  if (!ctx) {
-    return;
-  }
-
-  const now = ctx.currentTime;
-  const duration = 1.7;
-  const osc = ctx.createOscillator();
-  osc.type = 'sawtooth';
-  osc.frequency.setValueAtTime(320, now);
-  osc.frequency.exponentialRampToValueAtTime(1400, now + duration);
-
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.Q.value = 8;
-  filter.frequency.setValueAtTime(900, now);
-  filter.frequency.exponentialRampToValueAtTime(3200, now + duration);
-
-  const env = ctx.createGain();
-  env.gain.setValueAtTime(0.0001, now);
-  env.gain.exponentialRampToValueAtTime(1.4, now + 0.05);
-  env.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
-  osc.connect(filter);
-  filter.connect(env);
-  env.connect(getFxMaster(ctx));
-  osc.start(now);
-  osc.stop(now + duration + 0.02);
-
-  playNoiseSweep({
-    startFreq: 400,
-    endFreq: 2800,
-    duration,
-    peakGain: 0.45,
-    q: 1.1,
-  });
+export async function playChime() {
+  await playSample(FX_FILES.chime, 1);
 }
 
 export async function playImpact() {
-  await unlockDjFx();
-  const ctx = getContext();
-  if (!ctx) {
-    return;
-  }
-
-  const now = ctx.currentTime;
-  const osc = ctx.createOscillator();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(90, now);
-  osc.frequency.exponentialRampToValueAtTime(32, now + 0.42);
-
-  const env = ctx.createGain();
-  env.gain.setValueAtTime(2.8, now);
-  env.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
-
-  osc.connect(env);
-  env.connect(getFxMaster(ctx));
-  osc.start(now);
-  osc.stop(now + 0.48);
-
-  playNoiseSweep({
-    startFreq: 200,
-    endFreq: 60,
-    duration: 0.18,
-    peakGain: 1.4,
-    q: 0.8,
-  });
+  await playSample(FX_FILES.impact, 1.25);
 }
 
 export async function playEchoOut() {
-  await unlockDjFx();
-  const ctx = getContext();
-  if (!ctx) {
-    return;
-  }
-
-  const now = ctx.currentTime;
-  for (let i = 0; i < 8; i += 1) {
-    const startAt = now + i * 0.26;
-    const level = 1.3 * Math.pow(0.68, i);
-    const osc = ctx.createOscillator();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(220, startAt);
-
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(1800 - i * 160, startAt);
-
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(0.0001, startAt);
-    env.gain.exponentialRampToValueAtTime(Math.max(level, 0.02), startAt + 0.01);
-    env.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.18);
-
-    osc.connect(filter);
-    filter.connect(env);
-    env.connect(getFxMaster(ctx));
-    osc.start(startAt);
-    osc.stop(startAt + 0.2);
-  }
+  await playSample(FX_FILES.echoOut, 1.05);
 }
