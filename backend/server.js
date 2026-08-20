@@ -287,6 +287,23 @@ app.get('/api/playlists', requireAuth, async (req, res) => {
       });
 
       if (response.status === 429) {
+        const retryAfter = response.headers.get('retry-after');
+        const bodyText = await response.clone().text().catch(() => '');
+        let body = null;
+        try {
+          body = bodyText ? JSON.parse(bodyText) : {};
+        } catch {
+          body = bodyText;
+        }
+        console.error('[Spotify 429] status:', response.status);
+        console.error('[Spotify 429] Retry-After:', retryAfter);
+        console.error('[Spotify 429] body:', bodyText === '' ? '(empty)' : bodyText);
+        console.error(
+          '[Spotify 429] error.reason:',
+          body && typeof body === 'object'
+            ? body.error?.reason || body.reason || '(none)'
+            : '(none)'
+        );
         sendSpotifyRateLimit(res, response);
         return;
       }
