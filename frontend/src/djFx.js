@@ -84,11 +84,41 @@ export async function playScratch() {
     playNoiseSweep({
       startFreq: burst.startFreq,
       endFreq: burst.endFreq,
-      duration: 0.18,
-      peakGain: 0.4,
-      q: 3.6,
+      duration: 0.22,
+      peakGain: 0.85,
+      q: 2.4,
       delay: burst.delay,
     });
+  });
+}
+
+function playSpinHit(startAt, duration, startFreq, endFreq, oscGainLevel, noiseGain) {
+  const ctx = getContext();
+  if (!ctx) {
+    return;
+  }
+
+  const osc = ctx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(startFreq, startAt);
+  osc.frequency.exponentialRampToValueAtTime(endFreq, startAt + duration);
+
+  const oscGain = ctx.createGain();
+  oscGain.gain.setValueAtTime(oscGainLevel, startAt);
+  oscGain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+
+  osc.connect(oscGain);
+  oscGain.connect(ctx.destination);
+  osc.start(startAt);
+  osc.stop(startAt + duration);
+
+  playNoiseSweep({
+    startFreq: startFreq * 2.2,
+    endFreq: endFreq * 1.4,
+    duration,
+    peakGain: noiseGain,
+    q: 2.4,
+    delay: Math.max(0, startAt - ctx.currentTime),
   });
 }
 
@@ -98,29 +128,20 @@ export async function playSpinback() {
   if (!ctx) {
     return;
   }
+  playSpinHit(ctx.currentTime, 3, 880, 55, 0.11, 0.26);
+}
+
+export async function playHypeSpins() {
+  await unlockDjFx();
+  const ctx = getContext();
+  if (!ctx) {
+    return;
+  }
 
   const now = ctx.currentTime;
-  const duration = 3;
-
-  const osc = ctx.createOscillator();
-  osc.type = 'sawtooth';
-  osc.frequency.setValueAtTime(880, now);
-  osc.frequency.exponentialRampToValueAtTime(55, now + duration);
-
-  const oscGain = ctx.createGain();
-  oscGain.gain.setValueAtTime(0.11, now);
-  oscGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
-  osc.connect(oscGain);
-  oscGain.connect(ctx.destination);
-  osc.start(now);
-  osc.stop(now + duration);
-
-  playNoiseSweep({
-    startFreq: 2600,
-    endFreq: 120,
-    duration,
-    peakGain: 0.26,
-    q: 2,
+  const hits = [0, 0.38, 0.76, 1.14, 1.52];
+  hits.forEach((offset, index) => {
+    const startFreq = 920 - index * 40;
+    playSpinHit(now + offset, 0.32, startFreq, 70, 0.16, 0.32);
   });
 }

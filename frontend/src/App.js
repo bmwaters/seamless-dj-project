@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import './App.css';
-import { playScratch, playSpinback, playWhoosh, unlockDjFx } from './djFx';
+import { playHypeSpins, playScratch, playSpinback, playWhoosh, unlockDjFx } from './djFx';
 import { useSpotifyPlayer } from './useSpotifyPlayer';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:5050';
@@ -414,6 +414,9 @@ function App() {
             </button>
             <button type="button" className="fx-btn" onClick={playSpinback}>
               Spinback
+            </button>
+            <button type="button" className="fx-btn" onClick={playHypeSpins}>
+              Hype
             </button>
             <button
               type="button"
