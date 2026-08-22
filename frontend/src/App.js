@@ -3,7 +3,6 @@ import './App.css';
 import {
   playAirhorn,
   playApplause,
-  playChime,
   playEchoOut,
   playHypeSpins,
   playImpact,
@@ -45,11 +44,8 @@ function storageKey(userId) {
   return `seamless-dj-sets-${userId}`;
 }
 
-function urisFromSets(sets, fromIndex) {
-  return sets
-    .slice(fromIndex)
-    .flatMap((set) => set.tracks.map((track) => track.uri))
-    .filter(Boolean);
+function urisFromSet(sets, index) {
+  return (sets?.[index]?.tracks || []).map((track) => track.uri).filter(Boolean);
 }
 
 function normalizeSearch(value) {
@@ -80,6 +76,134 @@ function formatTime(ms) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
+function IconWave() {
+  return (
+    <svg className="fx-wave" viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="3" y="12" width="2.4" height="8" rx="1.2" />
+      <rect x="8" y="8" width="2.4" height="16" rx="1.2" />
+      <rect x="13" y="4" width="2.4" height="24" rx="1.2" />
+      <rect x="18" y="8" width="2.4" height="16" rx="1.2" />
+      <rect x="23" y="11" width="2.4" height="10" rx="1.2" />
+      <rect x="28" y="13" width="2.4" height="6" rx="1.2" />
+    </svg>
+  );
+}
+
+function IconPrev() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M15.5 6.5 9 12l6.5 5.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconNext() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8.5 6.5 15 12l-6.5 5.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconPlay() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8.5 6.5v11L18 12z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconPause() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="7" y="6.5" width="3.4" height="11" rx="1" fill="currentColor" />
+      <rect x="13.6" y="6.5" width="3.4" height="11" rx="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconFadePause() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M4 10v4h3l4 3.5V6.5L7 10H4zM14 9.2c.9.7.9 4.9 0 5.6M16.7 7.6c1.7 1.4 1.7 7.4 0 8.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconAnnouncePause() {
+  return (
+    <svg className="announce-pause-icon" viewBox="0 0 32 32" aria-hidden="true">
+      <path
+        d="M25.4 14.1a9.2 9.2 0 1 0-14.9 7.05L7.2 26.2l5.15-2.05A9.2 9.2 0 0 0 25.4 14.1z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <rect x="11.1" y="11.15" width="9.8" height="2.15" rx="1.07" fill="currentColor" />
+      <rect x="11.1" y="16.35" width="9.8" height="2.15" rx="1.07" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconSliders() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M5 7h14M5 12h14M5 17h14M9 7V4.8M15 12V9.8M11 17v-2.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <circle cx="9" cy="7" r="1.7" fill="currentColor" />
+      <circle cx="15" cy="12" r="1.7" fill="currentColor" />
+      <circle cx="11" cy="17" r="1.7" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconTimer() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="13" r="7.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 13V9.4M10 4.6h4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconShuffle() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M4 7h3.2c2 0 3.1 1 5.3 5s3.3 5 5.3 5H21M4 17h3.2c.8 0 1.5-.2 2.3-.7M16.8 7H21"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path d="m18.2 4.8 2.8 2.2-2.8 2.2M18.2 14.8 21 17l-2.8 2.2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconSearch() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="m16 16 4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [playlists, setPlaylists] = useState([]);
@@ -100,12 +224,21 @@ function App() {
   });
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubPosition, setScrubPosition] = useState(0);
+  const [pauseAfterSong, setPauseAfterSong] = useState(false);
+  const [holdStatus, setHoldStatus] = useState(null);
+  const [shuffleHelpOpen, setShuffleHelpOpen] = useState(false);
   const remainingUris = useRef([]);
   const currentChunk = useRef([]);
   const wasPlaying = useRef(false);
   const playlistPickerRef = useRef(null);
   const setsRef = useRef(sets);
+  const playingFromIndexRef = useRef(playingFromIndex);
+  const pauseAfterSongRef = useRef(pauseAfterSong);
+  const holdStatusRef = useRef(holdStatus);
   setsRef.current = sets;
+  playingFromIndexRef.current = playingFromIndex;
+  pauseAfterSongRef.current = pauseAfterSong;
+  holdStatusRef.current = holdStatus;
 
   function getSkipAtMs(uri, duration) {
     if (!uri || !duration) {
@@ -120,19 +253,67 @@ function App() {
     return Math.max(0, duration - DEFAULT_CUT_MS);
   }
 
+  function isLastTrackOfCurrentSet(uri) {
+    if (!uri || remainingUris.current.length > 0) {
+      return false;
+    }
+    const chunk = currentChunk.current;
+    return chunk.length > 0 && chunk[chunk.length - 1] === uri;
+  }
+
+  function getHoldMode(uri) {
+    if (holdStatusRef.current?.type === 'announcement') {
+      return false;
+    }
+    return pauseAfterSongRef.current || isLastTrackOfCurrentSet(uri);
+  }
+
+  function handlePlaybackHold(uri) {
+    const wasPauseAfterSong = pauseAfterSongRef.current;
+    if (wasPauseAfterSong) {
+      setPauseAfterSong(false);
+    }
+    const index = playingFromIndexRef.current;
+    const currentSets = setsRef.current || [];
+    if (index != null && isLastTrackOfCurrentSet(uri)) {
+      const finished = currentSets[index];
+      const next = currentSets[index + 1];
+      setHoldStatus({
+        type: 'set-ended',
+        finishedTitle: finished?.title || 'Set',
+        nextTitle: next?.title || null,
+      });
+      return;
+    }
+    if (wasPauseAfterSong) {
+      setHoldStatus({ type: 'pause-after-song' });
+    }
+  }
+
   const {
     deviceId,
     playerState,
     playerError,
     isPaused,
     currentTrack,
+    shuffle,
     positionMs,
     durationMs,
     togglePlay,
     nextTrack,
     previousTrack,
     seek,
-  } = useSpotifyPlayer(Boolean(user), fadeEnabled, null, getSkipAtMs);
+    fadeOutAndPause,
+    resumeFromHold,
+    continueAfterSongWait,
+  } = useSpotifyPlayer(
+    Boolean(user),
+    fadeEnabled,
+    null,
+    getSkipAtMs,
+    getHoldMode,
+    handlePlaybackHold
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -239,13 +420,15 @@ function App() {
       return;
     }
 
-    const uris = urisFromSets(sets || [], index);
+    const uris = urisFromSet(sets || [], index);
     if (uris.length === 0) {
       setError('That set has no playable songs yet.');
       return;
     }
 
     setError(null);
+    setHoldStatus(null);
+    setPauseAfterSong(false);
     remainingUris.current = uris;
     setPlayingFromIndex(index);
     try {
@@ -270,10 +453,21 @@ function App() {
       playerState.position === 0 &&
       remainingUris.current.length > 0;
 
+    const endedLastOfSet =
+      playerState.paused &&
+      wasPlaying.current &&
+      currentUri &&
+      currentUri === lastUri &&
+      playerState.position === 0 &&
+      remainingUris.current.length === 0 &&
+      !holdStatusRef.current;
+
     wasPlaying.current = !playerState.paused;
 
     if (reachedEnd) {
       playChunk().catch((playError) => setError(playError.message));
+    } else if (endedLastOfSet) {
+      handlePlaybackHold(currentUri);
     }
     // playChunk is stable enough via refs; we only want this on player state ticks
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -389,6 +583,32 @@ function App() {
 
   async function onPlayPauseClick() {
     await unlockDjFx();
+    if (holdStatus?.type === 'announcement') {
+      try {
+        await resumeFromHold();
+        setHoldStatus(null);
+      } catch (playError) {
+        setError(playError.message);
+      }
+      return;
+    }
+    if (holdStatus?.type === 'pause-after-song') {
+      try {
+        await continueAfterSongWait();
+        setHoldStatus(null);
+      } catch (playError) {
+        setError(playError.message);
+      }
+      return;
+    }
+    if (holdStatus?.type === 'set-ended') {
+      setError(
+        holdStatus.nextTitle
+          ? `${holdStatus.finishedTitle} finished. Press Play on ${holdStatus.nextTitle} when you are ready.`
+          : `${holdStatus.finishedTitle} finished.`
+      );
+      return;
+    }
     if (isPaused && !currentTrack && (sets || []).some((set) => set.tracks.length > 0)) {
       await playFromSet(0);
       return;
@@ -400,10 +620,48 @@ function App() {
     }
   }
 
+  async function onFadePauseNow() {
+    await unlockDjFx();
+    try {
+      setPauseAfterSong(false);
+      await fadeOutAndPause();
+      setHoldStatus({ type: 'announcement' });
+    } catch (playError) {
+      setError(playError.message);
+    }
+  }
+
+  function onPauseAfterSong() {
+    setPauseAfterSong((armed) => !armed);
+  }
+
+  function waitMessage() {
+    if (holdStatus?.type === 'announcement') {
+      return 'Waiting for announcement — press Play to resume.';
+    }
+    if (holdStatus?.type === 'pause-after-song') {
+      return 'Waiting after song — press Play to continue.';
+    }
+    if (holdStatus?.type === 'set-ended') {
+      return holdStatus.nextTitle
+        ? `${holdStatus.finishedTitle} finished. Play ${holdStatus.nextTitle} when ready.`
+        : `${holdStatus.finishedTitle} finished.`;
+    }
+    return null;
+  }
+
+  const shuffleTooltip = shuffle
+    ? 'Spotify Shuffle: On. Shuffle may change the intended Event Flow playback order.'
+    : 'Spotify Shuffle: Off';
+
   const hasSongs = (sets || []).some((set) => set.tracks.length > 0);
   const nowPlayingName = currentTrack?.name;
   const nowPlayingArtists = (currentTrack?.artists || []).map((artist) => artist.name).join(', ');
   const mixOutMs = currentMixOutMs();
+  const albumArt =
+    currentTrack?.album?.images?.[0]?.url ||
+    currentTrack?.album?.images?.[1]?.url ||
+    null;
   const playlistMatches = playlists.filter((playlist) =>
     playlistMatchesQuery(playlist, playlistQuery)
   );
@@ -428,6 +686,9 @@ function App() {
 
       {user && (
         <div className="player-bar">
+          <div className={`player-art${albumArt ? '' : ' empty'}`}>
+            {albumArt ? <img src={albumArt} alt="" /> : null}
+          </div>
           <div className="now-playing">
             {nowPlayingName ? (
               <>
@@ -456,84 +717,149 @@ function App() {
               onKeyUp={(event) => onSeekCommit(Number(event.target.value))}
             />
             <span>{formatTime(durationMs)}</span>
-            <button
-              type="button"
-              className="fx-btn"
-              disabled={!currentTrack || !durationMs}
-              onClick={mixOutMs == null ? markMixOut : clearMixOut}
-            >
-              {mixOutMs == null ? 'Set mix-out' : `Clear mix-out (${formatTime(mixOutMs)})`}
-            </button>
           </div>
           <div className="player-controls">
-            <label className={`fade-toggle${fadeEnabled ? ' on' : ''}`}>
-              <input
-                type="checkbox"
-                checked={fadeEnabled}
-                onChange={(event) => setFadeEnabled(event.target.checked)}
-              />
-              <span className="fade-switch" aria-hidden="true" />
-              Tight mix
-            </label>
             <button
               type="button"
+              className="transport skip-btn"
               disabled={!deviceId || !currentTrack}
               onClick={previousTrack}
+              aria-label="Previous"
             >
-              Previous
+              <IconPrev />
             </button>
             <button
               type="button"
               className="play-main"
               disabled={!deviceId || !hasSongs}
               onClick={onPlayPauseClick}
+              aria-label={isPaused ? 'Play' : 'Pause'}
             >
-              {isPaused ? 'Play' : 'Pause'}
+              {isPaused ? <IconPlay /> : <IconPause />}
             </button>
-            <button type="button" disabled={!deviceId || !currentTrack} onClick={nextTrack}>
-              Skip
+            <button
+              type="button"
+              className="transport skip-btn"
+              disabled={!deviceId || !currentTrack}
+              onClick={nextTrack}
+              aria-label="Skip"
+            >
+              <IconNext />
             </button>
           </div>
         </div>
       )}
 
       {user && (
+        <div className="event-controls">
+          <button
+            type="button"
+            className="event-card event-fade"
+            disabled={!deviceId || !currentTrack || isPaused}
+            onClick={onFadePauseNow}
+          >
+            <IconFadePause />
+            <span>Fade + Pause</span>
+          </button>
+          <button
+            type="button"
+            className={`event-card event-announce${pauseAfterSong ? ' armed' : ''}`}
+            disabled={!deviceId || !currentTrack}
+            onClick={onPauseAfterSong}
+          >
+            <IconAnnouncePause />
+            <span>Pause After Song</span>
+          </button>
+          <button
+            type="button"
+            className="event-card event-mixout"
+            disabled={!currentTrack || !durationMs}
+            onClick={mixOutMs == null ? markMixOut : clearMixOut}
+          >
+            <IconSliders />
+            <span>
+              {mixOutMs == null ? 'Set Mix-Out' : `Clear mix-out (${formatTime(mixOutMs)})`}
+            </span>
+          </button>
+          <label className={`event-card event-tight fade-toggle${fadeEnabled ? ' on' : ''}`}>
+            <IconTimer />
+            <span>Tight Mix</span>
+            <input
+              type="checkbox"
+              checked={fadeEnabled}
+              onChange={(event) => setFadeEnabled(event.target.checked)}
+            />
+            <span className="fade-switch" aria-hidden="true" />
+          </label>
+          <button
+            type="button"
+            className={`event-card event-shuffle${shuffle ? ' on' : ''}`}
+            title={shuffleTooltip}
+            aria-label={shuffleTooltip}
+            aria-expanded={shuffleHelpOpen}
+            onClick={() => setShuffleHelpOpen((open) => !open)}
+          >
+            <IconShuffle />
+            <span className="shuffle-copy">
+              <strong>Shuffle</strong>
+              <em>{shuffle ? 'On' : 'Off'}</em>
+            </span>
+          </button>
+        </div>
+      )}
+      {user && waitMessage() && (
+        <p className="event-wait">{waitMessage()}</p>
+      )}
+
+      {user && (
         <div className="fx-pads">
           <div className="fx-pad-cell">
             <span>Scratch</span>
-            <button type="button" className="fx-pad fx-scratch" onClick={playScratch} aria-label="Scratch" />
+            <button type="button" className="fx-pad fx-scratch" onClick={playScratch} aria-label="Scratch">
+              <IconWave />
+            </button>
           </div>
           <div className="fx-pad-cell">
             <span>Spinback</span>
-            <button type="button" className="fx-pad fx-spinback" onClick={playSpinback} aria-label="Spinback" />
+            <button type="button" className="fx-pad fx-spinback" onClick={playSpinback} aria-label="Spinback">
+              <IconWave />
+            </button>
           </div>
           <div className="fx-pad-cell">
             <span>Hype</span>
-            <button type="button" className="fx-pad fx-hype" onClick={playHypeSpins} aria-label="Hype" />
+            <button type="button" className="fx-pad fx-hype" onClick={playHypeSpins} aria-label="Hype">
+              <IconWave />
+            </button>
           </div>
           <div className="fx-pad-cell">
             <span>Applause</span>
-            <button type="button" className="fx-pad fx-applause" onClick={playApplause} aria-label="Applause" />
+            <button type="button" className="fx-pad fx-applause" onClick={playApplause} aria-label="Applause">
+              <IconWave />
+            </button>
           </div>
           <div className="fx-pad-cell">
             <span>Air horn</span>
-            <button type="button" className="fx-pad fx-airhorn" onClick={playAirhorn} aria-label="Air horn" />
+            <button type="button" className="fx-pad fx-airhorn" onClick={playAirhorn} aria-label="Air horn">
+              <IconWave />
+            </button>
           </div>
           <div className="fx-pad-cell">
             <span>Vinyl stop</span>
-            <button type="button" className="fx-pad fx-vinyl" onClick={playVinylStop} aria-label="Vinyl stop" />
-          </div>
-          <div className="fx-pad-cell">
-            <span>Chime</span>
-            <button type="button" className="fx-pad fx-chime" onClick={playChime} aria-label="Chime" />
+            <button type="button" className="fx-pad fx-vinyl" onClick={playVinylStop} aria-label="Vinyl stop">
+              <IconWave />
+            </button>
           </div>
           <div className="fx-pad-cell">
             <span>Impact</span>
-            <button type="button" className="fx-pad fx-impact" onClick={playImpact} aria-label="Impact" />
+            <button type="button" className="fx-pad fx-impact" onClick={playImpact} aria-label="Impact">
+              <IconWave />
+            </button>
           </div>
           <div className="fx-pad-cell">
             <span>Echo out</span>
-            <button type="button" className="fx-pad fx-echo" onClick={playEchoOut} aria-label="Echo out" />
+            <button type="button" className="fx-pad fx-echo" onClick={playEchoOut} aria-label="Echo out">
+              <IconWave />
+            </button>
           </div>
         </div>
       )}
@@ -556,6 +882,8 @@ function App() {
             <div className="section-heading">
               <h2>Event Flow</h2>
               <div className="playlist-picker" ref={playlistPickerRef}>
+              <div className="playlist-search">
+              <IconSearch />
               <input
                 type="text"
                 autoComplete="off"
@@ -575,6 +903,7 @@ function App() {
                 }}
                 aria-label="Search Spotify playlists"
               />
+              </div>
               {playlists.length === 0 && !error && (
                 <p className="hint">No playlists found on this account.</p>
               )}
@@ -624,7 +953,7 @@ function App() {
                   >
                     <div className="set-row">
                       {set.image && (
-                        <img src={set.image} alt="" width="48" height="48" />
+                        <img src={set.image} alt="" width="52" height="52" />
                       )}
                       <input
                         aria-label="Set title"

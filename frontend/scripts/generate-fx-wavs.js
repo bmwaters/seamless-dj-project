@@ -237,33 +237,6 @@ function makeVinylStop() {
   return normalize(tone);
 }
 
-function makeChime() {
-  const out = new Float32Array(seconds(1.6));
-  const notes = [
-    [0, 523.25],
-    [0.12, 659.25],
-    [0.24, 783.99],
-  ];
-  notes.forEach(([start, freq]) => {
-    const n = seconds(1.3);
-    const bell = osc(
-      n,
-      'sine',
-      () => freq,
-      (t) => Math.exp(-t * 3.2) * 0.55
-    );
-    const partial = osc(
-      n,
-      'sine',
-      () => freq * 2.01,
-      (t) => Math.exp(-t * 4.5) * 0.18
-    );
-    mixAt(out, bell, seconds(start), 1);
-    mixAt(out, partial, seconds(start), 1);
-  });
-  return normalize(out);
-}
-
 function makeImpact() {
   const n = seconds(0.55);
   const body = osc(
@@ -302,7 +275,6 @@ writeWav('applause.wav', makeApplause());
 writeWav('hype.wav', makeHype());
 writeWav('airhorn.wav', makeAirhorn());
 writeWav('vinyl-stop.wav', makeVinylStop());
-writeWav('chime.wav', makeChime());
 writeWav('impact.wav', makeImpact());
 writeWav('echo-out.wav', makeEchoOut());
 console.log('Wrote FX wavs to', OUT_DIR);

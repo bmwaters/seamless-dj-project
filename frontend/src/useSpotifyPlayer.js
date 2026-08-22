@@ -26,7 +26,7 @@ function durationOf(state) {
   return state?.duration || state?.track_window?.current_track?.duration_ms || 0;
 }
 
-export function useSpotifyPlayer(enabled, fadeEnabled = false, onFadeTransition, getSkipAtMs) {
+export function useSpotifyPlayer(enabled, fadeEnabled = false, onFadeTransition, getSkipAtMs, getHoldMode, onHold) {
   const [deviceId, setDeviceId] = useState(null);
   const [playerState, setPlayerState] = useState(null);
   const [playerError, setPlayerError] = useState(null);
@@ -37,20 +37,26 @@ export function useSpotifyPlayer(enabled, fadeEnabled = false, onFadeTransition,
   const lastUri = useRef(null);
   const skippingOutro = useRef(false);
   const pendingFadeIn = useRef(false);
+  const announcementHold = useRef(false);
   const lastTick = useRef({ position: 0, at: 0, duration: 0 });
   const lastFadeVolume = useRef(1);
   const fadeToken = useRef(0);
   const onFadeTransitionRef = useRef(onFadeTransition);
   const getSkipAtMsRef = useRef(getSkipAtMs);
+  const getHoldModeRef = useRef(getHoldMode);
+  const onHoldRef = useRef(onHold);
 
   fadeEnabledRef.current = fadeEnabled;
   onFadeTransitionRef.current = onFadeTransition;
   getSkipAtMsRef.current = getSkipAtMs;
+  getHoldModeRef.current = getHoldMode;
+  onHoldRef.current = onHold;
 
   async function restoreVolume() {
     fadeToken.current += 1;
     skippingOutro.current = false;
     pendingFadeIn.current = false;
+    announcementHold.current = false;
     lastFadeVolume.current = 1;
     await playerRef.current?.setVolume(1);
   }
@@ -70,6 +76,23 @@ export function useSpotifyPlayer(enabled, fadeEnabled = false, onFadeTransition,
       lastFadeVolume.current = volume;
       await player.setVolume(volume);
     }
+  }
+
+  async function fadeOutVolume(player) {
+    const token = fadeToken.current + 1;
+    fadeToken.current = token;
+    const start = lastFadeVolume.current;
+    const steps = 12;
+    for (let i = 1; i <= steps; i += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 90));
+      if (token !== fadeToken.current) {
+        return false;
+      }
+      const volume = Math.max(0.05, start * (1 - i / steps));
+      lastFadeVolume.current = volume;
+      await player.setVolume(volume);
+    }
+    return true;
   }
 
   useEffect(() => {
@@ -197,11 +220,48 @@ export function useSpotifyPlayer(enabled, fadeEnabled = false, onFadeTransition,
         lastUri.current = uri;
       }
 
-      if (!fadeEnabledRef.current || skippingOutro.current || state.paused) {
+      if (announcementHold.current || skippingOutro.current || state.paused) {
         return;
       }
 
+      const hold = Boolean(getHoldModeRef.current?.(uri));
       const skipAt = getSkipAtMsRef.current?.(uri, duration);
+      const canTightMix =
+        fadeEnabledRef.current && skipAt != null && skipAt >= 2000 && duration - skipAt >= 80;
+
+      if (hold && canTightMix) {
+        const fadeMs = 1400;
+        const fadeStart = Math.max(0, skipAt - fadeMs);
+        if (position >= skipAt) {
+          skippingOutro.current = true;
+          lastFadeVolume.current = 0.05;
+          await player.setVolume(0.05);
+          await player.pause();
+          onHoldRef.current?.(uri);
+          return;
+        }
+        if (position >= fadeStart && skipAt > fadeStart) {
+          const progress = (position - fadeStart) / (skipAt - fadeStart);
+          const volume = Math.max(0.05, 1 - progress);
+          if (Math.abs(volume - lastFadeVolume.current) >= 0.04) {
+            lastFadeVolume.current = volume;
+            await player.setVolume(volume);
+          }
+        }
+        return;
+      }
+
+      if (hold && duration > 0 && duration - position <= 400) {
+        skippingOutro.current = true;
+        await player.pause();
+        onHoldRef.current?.(uri);
+        return;
+      }
+
+      if (!fadeEnabledRef.current || hold) {
+        return;
+      }
+
       if (skipAt == null || skipAt < 2000 || duration - skipAt < 80) {
         return;
       }
@@ -250,17 +310,52 @@ export function useSpotifyPlayer(enabled, fadeEnabled = false, onFadeTransition,
     await playerRef.current?.seek(positionMsValue);
   }
 
+  async function fadeOutAndPause() {
+    const player = playerRef.current;
+    if (!player) {
+      return;
+    }
+    announcementHold.current = true;
+    skippingOutro.current = true;
+    pendingFadeIn.current = false;
+    const faded = await fadeOutVolume(player);
+    if (faded === false) {
+      return;
+    }
+    await player.pause();
+  }
+
+  async function resumeFromHold() {
+    const player = playerRef.current;
+    if (!player) {
+      return;
+    }
+    announcementHold.current = false;
+    skippingOutro.current = false;
+    await player.resume();
+    await fadeInVolume(player);
+  }
+
+  async function continueAfterSongWait() {
+    await restoreVolume();
+    await playerRef.current?.nextTrack();
+  }
+
   return {
     deviceId,
     playerState,
     playerError,
     isPaused: playerState?.paused !== false,
     currentTrack: playerState?.track_window?.current_track || null,
+    shuffle: Boolean(playerState?.shuffle),
     positionMs,
     durationMs,
     togglePlay,
     nextTrack,
     previousTrack,
     seek,
+    fadeOutAndPause,
+    resumeFromHold,
+    continueAfterSongWait,
   };
 }

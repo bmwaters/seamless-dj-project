@@ -8,7 +8,6 @@ const FX_FILES = {
   hype: '/fx/hype.wav',
   airhorn: '/fx/airhorn.wav',
   vinylStop: '/fx/vinyl-stop.wav',
-  chime: '/fx/chime.wav',
   impact: '/fx/impact.wav',
   echoOut: '/fx/echo-out.wav',
 };
@@ -195,14 +194,10 @@ export async function playVinylStop() {
   await playSample(FX_FILES.vinylStop, 1.1);
 }
 
-export async function playChime() {
-  await playSample(FX_FILES.chime, 1);
-}
-
 export async function playImpact() {
-  await playSample(FX_FILES.impact, 1.25);
+  await playSample(FX_FILES.impact, 2.15);
 }
 
 export async function playEchoOut() {
-  await playSample(FX_FILES.echoOut, 1.05);
+  await playSample(FX_FILES.echoOut, 1.9);
 }
